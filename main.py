@@ -1,25 +1,56 @@
 import json
-import requests
+import aiohttp
+import asyncio
 
-from pydantic import BaseModel
 from geopy.distance import geodesic
+from typing import Optional
+from pydantic import BaseModel
+from urllib.parse import quote
+
+from src.data import roads
 
 
-def main():
-    get_coords("Northern Road")
+async def main():
+    async with aiohttp.ClientSession() as session:
+        target_road = await get_osm_model(session, "Northern Road")
+
+        for shard in make_shards(roads, 5):
+            results = await asyncio.gather(*[
+                get_osm_model(
+                    session,
+                    f"{road_string}, Slough, UK"
+                ) for road_string in shard
+            ])
+
+            print(results)
 
 
-class OSMResponse(BaseModel):
+class OSMResponseCoords(BaseModel):
     lat: str
     lon: str
     display_name: str
 
-def get_coords(address):
-    url = f"https://nominatim.openstreetmap.org/search?format=json&q={address}, Slough, UK"
-    response = requests.get(url)
-    json.loads(response.json()[0])
-    OSMResponse.parse_raw()
+async def get_osm_model(
+    session: aiohttp.ClientSession,
+    search_string: str,
+) -> Optional[OSMResponseCoords]:
+    url = f"https://nominatim.openstreetmap.org/search?format=json&q={quote(search_string)}"
+    
+    res = await session.get(url)
+    if res.status != 200:
+        return None
+    
+    data = await res.json()
+    if data == []:
+        return None
+    
+    print(1)
+
+    return OSMResponseCoords(**data[0])
+
+def make_shards(input_list, n):
+    return [input_list[i:i + n] for i in range(0, len(input_list), n)]
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

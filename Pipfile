@@ -5,8 +5,8 @@ name = "pypi"
 
 [packages]
 geopy = "*"
-requests = "*"
 pydantic = "*"
+aiohttp = "*"
 
 [dev-packages]
 
