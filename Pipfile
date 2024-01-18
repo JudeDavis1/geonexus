@@ -6,6 +6,7 @@ name = "pypi"
 [packages]
 geopy = "*"
 requests = "*"
+pydantic = "*"
 
 [dev-packages]
 
