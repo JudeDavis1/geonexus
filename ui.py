@@ -64,7 +64,11 @@ class GeonexApp(ctk.CTk):
 
     async def calculate_distances_routine(self, target_road_name):
         if target_road_name:
-            distance_map = await get_distance_map(target_road_name)
+            distance_map = None
+            try:
+                distance_map = await get_distance_map(target_road_name)
+            except:
+                pass
             self.loop.call_soon_threadsafe(self.display_results, distance_map)
         else:
             self.loop.call_soon_threadsafe(
@@ -79,6 +83,10 @@ class GeonexApp(ctk.CTk):
 
     def display_results(self, distance_map):
         self.results_text.delete("1.0", tk.END)
+
+        if distance_map == None:
+            self.results_text.insert(tk.END, "Couldn't find any maps.")
+
         sorted_results = sorted(distance_map.items(), key=lambda item: item[1])
 
         for road, distance in sorted_results[:10]:
