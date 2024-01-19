@@ -16,4 +16,5 @@ pydantic-settings = "*"
 python_version = "3.11"
 
 [scripts]
-cli = "python3 main.py"
+cli = "python3 cli.py"
+ui = "python3 ui.py"

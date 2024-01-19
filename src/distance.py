@@ -5,26 +5,26 @@ import aiohttp
 import certifi
 from geopy.distance import geodesic
 
-from src.app_config import app_config
-from src.data import roads
-from src.integrations.opencage import RoadData, get_oc_model
-
-assert app_config.OC_API_KEY != None, "OpenCage API key doesn't exist."
+from .data import roads
+from .integrations.opencage import RoadData, get_oc_model
 
 DistanceMap = dict[str, float]
 
 
-async def main():
+async def get_distance_map(target_road_name: str) -> DistanceMap:
     # Use an ssl context for requests
     distance_map = dict()
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     async with aiohttp.ClientSession(
         connector=aiohttp.TCPConnector(ssl=ssl_context)
     ) as session:
-        target_road = await get_oc_model(session, "Northern Road, Slough")
+        target_road = await get_oc_model(session, target_road_name)
+        assert (
+            target_road != None
+        ), "Couldn't find any matching roads. Please check your query and try again."
 
         # Process 10 shards of roads concurrently
-        for shard in make_shards(roads, 10):
+        for shard in make_shards(roads, 20):
             # Concurrently generate
             request_routines = [
                 get_oc_model(session, f"{road_string}, Slough, UK")
@@ -35,6 +35,7 @@ async def main():
             distance_routines = [
                 get_distance_from_target(result, target_road)
                 for result in request_results
+                if result != None
             ]
             distance_results = await asyncio.gather(*distance_routines)
 
@@ -42,10 +43,7 @@ async def main():
             for d in distance_results:
                 distance_map.update(d)
 
-    distance_map = sorted(distance_map.items(), key=lambda item: item[1])
-    print("\nTop closest roads:")
-    for road, distance in distance_map[:10]:
-        print(f"\t{road}: {distance}")
+    return distance_map
 
 
 async def get_distance_from_target(
@@ -67,7 +65,3 @@ def make_shards(input_list, n):
     """
 
     return [input_list[i : i + n] for i in range(0, len(input_list), n)]
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
