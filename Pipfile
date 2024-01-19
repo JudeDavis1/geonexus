@@ -9,6 +9,7 @@ pydantic = "*"
 aiohttp = "*"
 python-dotenv = "*"
 pydantic-settings = "*"
+customtkinter = "*"
 
 [dev-packages]
 
