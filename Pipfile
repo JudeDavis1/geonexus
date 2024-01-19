@@ -8,6 +8,7 @@ geopy = "*"
 pydantic = "*"
 aiohttp = "*"
 python-dotenv = "*"
+pydantic-settings = "*"
 
 [dev-packages]
 

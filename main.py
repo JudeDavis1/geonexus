@@ -1,81 +1,72 @@
-import os
-import time
-import json
-import aiohttp
 import asyncio
+import ssl
 
-from dotenv import load_dotenv, find_dotenv
+import aiohttp
+import certifi
 from geopy.distance import geodesic
-from typing import Optional
-from pydantic import BaseModel
-from urllib.parse import quote
 
+from src.app_config import app_config
 from src.data import roads
+from src.integrations.opencage import RoadData, get_oc_model
 
+assert app_config.OC_API_KEY != None, "OpenCage API key doesn't exist."
 
-load_dotenv(find_dotenv('.env'))
+DistanceMap = dict[str, float]
 
-API_KEY = os.getenv("OC_API_KEY")
-assert API_KEY != None
 
 async def main():
-    async with aiohttp.ClientSession() as session:
-        target_road = await get_oc_model(session, "Northern Road")
+    # Use an ssl context for requests
+    distance_map = dict()
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    async with aiohttp.ClientSession(
+        connector=aiohttp.TCPConnector(ssl=ssl_context)
+    ) as session:
+        target_road = await get_oc_model(session, "Northern Road, Slough")
 
-        start = time.time()
-        for shard in make_shards(roads, 5):
-            routines = [
-                get_oc_model(
-                    session,
-                    f"{road_string}, Slough, UK"
-                ) for road_string in shard
+        # Process 10 shards of roads concurrently
+        for shard in make_shards(roads, 10):
+            # Concurrently generate
+            request_routines = [
+                get_oc_model(session, f"{road_string}, Slough, UK")
+                for road_string in shard
             ]
-            results = await asyncio.gather(*routines)
-        
-        end = time.time()
-        print("ASYNC")
-        print(end - start)
+            request_results = await asyncio.gather(*request_routines)
 
-        start = time.time()
-        for shard in make_shards(roads, 5):
-            for road_string in shard:
-                await get_oc_model(
-                    session,
-                    f"{road_string}, Slough, UK"
-                )
-        
-        end = time.time()
+            distance_routines = [
+                get_distance_from_target(result, target_road)
+                for result in request_results
+            ]
+            distance_results = await asyncio.gather(*distance_routines)
 
-        print("SYNC")
-        print(end - start)
+            # Update the distance map
+            for d in distance_results:
+                distance_map.update(d)
 
-class OCGeometry(BaseModel):
-    lat: float
-    lng: float
+    distance_map = sorted(distance_map.items(), key=lambda item: item[1])
+    print("\nTop closest roads:")
+    for road, distance in distance_map[:10]:
+        print(f"\t{road}: {distance}")
 
-class OCResponse(BaseModel):
-    geometry: OCGeometry
-    formatted: str
 
-async def get_oc_model(
-    session: aiohttp.ClientSession,
-    search_string: str,
-) -> Optional[OCResponse]:
-    url = f"https://api.opencagedata.com/geocode/v1/json?q={quote(search_string)}&key={API_KEY}"
-    
-    res = await session.get(url)
-    if res.status != 200:
-        return None
-    
-    data = await res.json()
-    if not data["results"]:
-        return None
-    
-    oc_res = OCResponse(**data["results"][0])
-    return oc_res
+async def get_distance_from_target(
+    road_data: RoadData,
+    target: RoadData,
+) -> DistanceMap:
+    distance = geodesic(
+        (road_data.geometry.lat, road_data.geometry.lng),
+        (target.geometry.lat, target.geometry.lng),
+    ).miles
+
+    return {road_data.formatted: distance}
+
 
 def make_shards(input_list, n):
-    return [input_list[i:i + n] for i in range(0, len(input_list), n)]
+    """
+    Make list of sharded inputs,
+    where each shard is of length `n` (the remainder is retained).
+    """
+
+    return [input_list[i : i + n] for i in range(0, len(input_list), n)]
 
 
 if __name__ == "__main__":
