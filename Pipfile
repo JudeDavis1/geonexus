@@ -9,6 +9,7 @@ pydantic = "*"
 aiohttp = "*"
 python-dotenv = "*"
 pydantic-settings = "*"
+customtkinter = "*"
 
 [dev-packages]
 
@@ -18,3 +19,4 @@ python_version = "3.11"
 [scripts]
 cli = "python3 cli.py"
 ui = "python3 ui.py"
+build = "pyinstaller --onefile --windowed --add-data \".env:.\" ui.py"
