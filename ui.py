@@ -1,6 +1,7 @@
 import asyncio
 import threading
 import tkinter as tk
+import tkinter.ttk as ttk
 from tkinter import scrolledtext
 
 import customtkinter as ctk
@@ -9,11 +10,12 @@ from src.distance import get_distance_map
 
 
 class GeonexApp(ctk.CTk):
+
     def __init__(self):
         super().__init__()
 
         self.title("Geonex App")
-        self.geometry("700x500")
+        self.geometry("400x400")
 
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever)
@@ -28,8 +30,9 @@ class GeonexApp(ctk.CTk):
         self.target_road_label = ctk.CTkLabel(self, text="Target Road Name:")
         self.target_road_label.pack(pady=5)
         self.target_road_entry = ctk.CTkEntry(
-            self, placeholder_text="e.g., Northern Road, Slough, UK", width=300
-        )
+            self,
+            placeholder_text="e.g., Northern Road, Slough, UK",
+            width=300)
         self.target_road_entry.pack(pady=5)
 
         # Progress bar (indeterminate)
@@ -38,21 +41,25 @@ class GeonexApp(ctk.CTk):
         self.progress_bar.pack_forget()
 
         # Calculate button
-        self.calculate_button = ctk.CTkButton(
-            self, text="Calculate", command=self.calculate_distances
-        )
+        self.calculate_button = ctk.CTkButton(self,
+                                              text="Calculate",
+                                              command=self.calculate_distances)
         self.calculate_button.pack(pady=20)
 
         # Results scrolled text area
-        self.results_text = scrolledtext.ScrolledText(
-            self, wrap=tk.WORD, height=15, width=60
-        )
-        self.results_text.pack(pady=10, fill="both", expand=True)
+        self.results_table = ttk.Treeview(self,
+                                          columns=("Road", "Distance"),
+                                          show="headings")
+        self.results_table.heading("Road", text="Road")
+        self.results_table.heading("Distance", text="Distance (miles)")
+        self.results_table.column("Road", anchor=tk.W)
+        self.results_table.column("Distance", anchor=tk.E)
+        self.results_table.pack(pady=10, fill="both", expand=True)
 
         # Clear button
-        self.clear_button = ctk.CTkButton(
-            self, text="Clear Results", command=self.clear_results
-        )
+        self.clear_button = ctk.CTkButton(self,
+                                          text="Clear Results",
+                                          command=self.clear_results)
         self.clear_button.pack(pady=5)
 
     def calculate_distances(self):
@@ -72,8 +79,8 @@ class GeonexApp(ctk.CTk):
             self.loop.call_soon_threadsafe(self.display_results, distance_map)
         else:
             self.loop.call_soon_threadsafe(
-                self.results_text.insert, tk.END, "Please enter a target road name.\n"
-            )
+                self.results_text.insert, tk.END,
+                "Please enter a target road name.\n")
 
         self.loop.call_soon_threadsafe(self.stop_progress_bar)
 
@@ -82,15 +89,17 @@ class GeonexApp(ctk.CTk):
         self.progress_bar.pack_forget()
 
     def display_results(self, distance_map):
-        self.results_text.delete("1.0", tk.END)
+        self.results_table.delete(
+            *self.results_table.get_children())  # Clear existing data
 
-        if distance_map == None:
-            self.results_text.insert(tk.END, "Couldn't find any maps.")
+        if distance_map is None:
+            return  # Display nothing if no results
 
         sorted_results = sorted(distance_map.items(), key=lambda item: item[1])
-
         for road, distance in sorted_results[:10]:
-            self.results_text.insert(tk.END, f"{road}: {distance:.2f} miles\n")
+            self.results_table.insert("",
+                                      tk.END,
+                                      values=(road, f"{distance:.2f}"))
 
     def clear_results(self):
         self.results_text.delete("1.0", tk.END)
